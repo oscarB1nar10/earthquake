@@ -22,9 +22,8 @@ data class AlarmSettings(
 
     companion object {
         // Multilingual defaults covering Google's "Android Earthquake Alerts".
-        // earthquake,quake,terremoto,sismo,seismo,temblor,séisme,
         const val DEFAULT_KEYWORDS = "Agáchate,Cúbrete,Agárrate,Drop,cover,hold on"
-        const val DEFAULT_ESP32_BASE_URL = "http://192.168.1.7"
+        const val DEFAULT_ESP32_BASE_URL = "http://192.168.1.10"
         const val DEFAULT_WHATSAPP_MESSAGE = "Suppose this is an earthquake notification"
     }
 }

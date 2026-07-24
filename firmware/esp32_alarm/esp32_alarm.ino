@@ -1,105 +1,110 @@
-/*
- * Earthquake Alarm — microcontroller receiver (ESP32, WiFi only)
- * --------------------------------------------------------------
- * Matches the Android app's Esp32AlarmClient. HTTP endpoints:
- *   GET/POST  http://<esp-ip>/alarm[?msg=...]   → sound the alarm
- *   GET       http://<esp-ip>/off               → silence it
- *   GET       http://<esp-ip>/status            → "ON <secs left>" or "OFF"
- *
- * On trigger it drives ALARM_PIN HIGH for up to ALARM_MS (wire it to a relay,
- * buzzer, or siren). Timing is non-blocking so HTTP keeps working while the
- * alarm sounds. Works on any ESP32 variant (WROOM, S2, C3, ...).
- *
- * Arduino IDE: Tools -> Board -> "ESP32 Dev Module", install the
- * "esp32 by Espressif Systems" boards package first.
- */
-
 #include <WiFi.h>
+// This library lets the ESP32 create a simple web server.
 #include <WebServer.h>
 
-// ---------- CONFIG: edit these ----------
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* wifi_net = "J.J";
+const char* wifi_pass = "MovB1nar10.01";
 
-const int   ALARM_PIN = 4;                    // GPIO4; swap for your relay/buzzer pin
-const unsigned long ALARM_MS = 30000UL;       // alarm stays on for up to 30 s
-// ----------------------------------------
+// This creates a web server on port 80.
+// Port 80 is the normal port used by websites with http://
+WebServer server(80);
 
-WebServer     server(80);
-unsigned long alarmUntil = 0;
+// GPIO26 means pin number 26 on the ESP32
+const int ALARM_PIN = 4;
+// Turn alarm ON
+const int ALARM_ON = LOW;
+// Turn alarm OFF
+const int ALARM_OFF = HIGH;
+bool isAlarmActive = false;
 
-void startAlarm(const char* source) {
-  alarmUntil = millis() + ALARM_MS;
-  digitalWrite(ALARM_PIN, HIGH);
-  Serial.printf("[ALARM] ON via %s\n", source);
+// This variable stores the time when the alarm should stop.
+unsigned long alarmEndTime = 0;
+
+// This function turns the alarm ON for a specific amout of time in milliseconds
+void turnAlarmOn(unsigned long durationMs) {
+  // Send ON signal to the alarm pin.
+  digitalWrite(ALARM_PIN, ALARM_ON);
+  isAlarmActive = true;
+  // Calculate when the alarm should turn off.
+  // millis() gives the time since the ESP32 started running.
+  alarmEndTime = millis() + durationMs;
 }
 
-void stopAlarm(const char* source) {
-  alarmUntil = 0;
-  digitalWrite(ALARM_PIN, LOW);
-  Serial.printf("[ALARM] OFF via %s\n", source);
+void turnAlarmOff() {
+  digitalWrite(ALARM_PIN, ALARM_OFF);
+  isAlarmActive = false;
 }
 
-bool alarmIsOn() {
-  return alarmUntil != 0;
-}
-
-// --- HTTP handlers ---
 void handleAlarm() {
-  if (server.hasArg("msg")) {
-    Serial.printf("[WiFi] message: %s\n", server.arg("msg").c_str());
-  }
-  startAlarm("WiFi");
-  server.send(200, "text/plain", "OK\n");
+  // Turn the alarm ON for 10 seconds
+  turnAlarmOn(10000);
+  // Send a response back to the phone
+  server.send(200, "text/plain", "Alarm ON for 10 seconds");
 }
 
+// This function runs when someone opens /off
 void handleOff() {
-  stopAlarm("WiFi");
-  server.send(200, "text/plain", "OFF\n");
+  turnAlarmOff();
+  server.send(200, "text/plain", "Alarm OFF");
 }
 
-void handleStatus() {
-  if (alarmIsOn()) {
-    unsigned long secsLeft = (alarmUntil - millis()) / 1000UL;
-    server.send(200, "text/plain", "ON " + String(secsLeft) + "\n");
+void handleAlarmStatus() {
+  if(isAlarmActive) {
+    server.send(200, "text/plain", "Alarm is active");
   } else {
-    server.send(200, "text/plain", "OFF\n");
+    server.send(200, "text/plain", "Alarm is off");
   }
 }
 
-void handleRoot() {
-  server.send(200, "text/plain",
-              "ESP32 alarm online. Endpoints: /alarm, /off, /status\n");
-}
-
+// setup() runs only one time when the ESP32 turns on or resets
 void setup() {
+  // Start serial communication between ESP32 and computer
+  // 115200 is the communication speed.
   Serial.begin(115200);
+  delay(2000);
+  // Configure ALARM_PIN as an output pin.
+  // Output means the ESP32 will send voltage from this pin.
   pinMode(ALARM_PIN, OUTPUT);
-  digitalWrite(ALARM_PIN, LOW);
+  // Start with the alarm turned OFF.
+  digitalWrite(ALARM_PIN, ALARM_OFF);
+  // Start connecting the ESP32 to our wi-fi network
+  WiFi.begin(wifi_net, wifi_pass);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("Connecting to WiFi");
+  // Print message
+  Serial.print("Connnecting to wifi");
+
+  // This loop waits until the ESP32 connects to wi-fi
   while (WiFi.status() != WL_CONNECTED) {
-    delay(400);
+    // Wait half a second
+    delay(500);
     Serial.print(".");
   }
-  String ip = WiFi.localIP().toString();
-  Serial.printf("\nConnected. Set the app's ESP32 base URL to: http://%s\n", ip.c_str());
 
-  server.on("/", handleRoot);
+  // Print a blank line after connecting
+  Serial.println();
+  // Print a confirmation message
+  Serial.println("Connected!");
+  Serial.print("ESP32 IP address: ");
+  // Print the IP address assigned to the ESP32
+  Serial.println(WiFi.localIP());
+
+  // Create the /alarm route using POST
+  // Example from browser:
+  // http://ESP32_IP/alarm
   server.on("/alarm", HTTP_GET, handleAlarm);
   server.on("/alarm", HTTP_POST, handleAlarm);
   server.on("/off", HTTP_GET, handleOff);
-  server.on("/status", HTTP_GET, handleStatus);
+  server.on("/status", HTTP_GET, handleAlarmStatus);
+
+  // Start the wen server
   server.begin();
 }
 
 void loop() {
+  // This checks if someone is trying to access /alar, /off, or /status
   server.handleClient();
-
-  // Auto turn-off after ALARM_MS.
-  if (alarmIsOn() && (long)(millis() - alarmUntil) >= 0) {
-    stopAlarm("timeout");
+  // Check if the alarm is active AND if the current time passed alarmEndTime
+  if (isAlarmActive && millis() > alarmEndTime) {
+    turnAlarmOff();
   }
 }
