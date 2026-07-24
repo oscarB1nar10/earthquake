@@ -1,0 +1,5 @@
+<resources>
+    <!-- Base app/window theme. Actual colors are supplied by Compose's
+         MaterialTheme at runtime; this just gives a no-action-bar window. -->
+    <style name="Theme.EarthquakeAlarm" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

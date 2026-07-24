@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Screen-watcher configuration. packageNames restricts events to the packages
+  that render emergency alert UIs, so the service never sees ordinary apps:
+    - com.google.android.gms                Google Play services (earthquake alerts + demo)
+    - com.google.android.apps.safetyhub     Personal Safety (Pixel)
+    - com.android.cellbroadcastreceiver     emergency cell broadcasts (AOSP)
+    - com.google.android.cellbroadcastreceiver  emergency cell broadcasts (Google)
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/screen_watcher_description"
+    android:notificationTimeout="200"
+    android:packageNames="com.google.android.gms,com.google.android.apps.safetyhub,com.android.cellbroadcastreceiver,com.google.android.cellbroadcastreceiver" />
